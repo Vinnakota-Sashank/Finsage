@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 43 72% 52%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 0 0% 63%;
+
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 63%;
+
+    --accent: 43 72% 52%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive: 4 82% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 43 72% 52% / 0.15;
+    --input: 0 0% 15%;
+    --ring: 43 72% 52%;
+
+    --radius: 0.75rem;
+
+    --gold: 43 72% 52%;
+    --gold-bright: 51 100% 50%;
+    --gold-dark: 37 75% 39%;
+    --gold-muted: 43 72% 52% / 0.15;
+
+    --success: 122 39% 49%;
+    --warning: 40 100% 50%;
+    --error: 4 82% 56%;
+    --info: 207 90% 54%;
+
+    --surface-1: 0 0% 4%;
+    --surface-2: 0 0% 7%;
+    --surface-3: 0 0% 10%;
+    --surface-4: 0 0% 12%;
+
+    --text-primary: 0 0% 100%;
+    --text-secondary: 0 0% 63%;
+    --text-tertiary: 0 0% 40%;
+
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 63%;
+    --sidebar-primary: 43 72% 52%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 43 72% 52% / 0.1;
+    --sidebar-ring: 43 72% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-gold-muted rounded-xl;
+  }
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5;
+  }
+  .gold-gradient-text {
+    @apply bg-gradient-to-r from-primary via-gold-bright to-primary bg-clip-text text-transparent;
+  }
+  .gold-glow {
+    box-shadow: 0 0 40px hsl(43 72% 52% / 0.15), 0 0 80px hsl(43 72% 52% / 0.05);
+  }
+  .gold-glow-sm {
+    box-shadow: 0 0 20px hsl(43 72% 52% / 0.1);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(0 0% 7%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 20%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(43 72% 52% / 0.5);
+}
