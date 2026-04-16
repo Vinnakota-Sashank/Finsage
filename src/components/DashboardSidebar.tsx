@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Bell,
   Receipt,
+  FileUp,
 } from "lucide-react";
 import FinSageLogo from "./FinSageLogo";
 
@@ -16,6 +17,7 @@ const navItems = [
   { title: "Simulator", icon: FlaskConical, path: "/simulator" },
   { title: "Alerts", icon: Bell, path: "/alerts" },
   { title: "Tax Intelligence", icon: Receipt, path: "/tax" },
+  { title: "Data Ingestion", icon: FileUp, path: "/ingestion" },
 ];
 
 const DashboardSidebar = () => {

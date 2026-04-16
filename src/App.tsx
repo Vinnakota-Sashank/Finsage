@@ -10,6 +10,7 @@ import Forecasting from "./pages/Forecasting";
 import Simulator from "./pages/Simulator";
 import Alerts from "./pages/Alerts";
 import Tax from "./pages/Tax";
+import Ingestion from "./pages/Ingestion";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/simulator" element={<Simulator />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/tax" element={<Tax />} />
+          <Route path="/ingestion" element={<Ingestion />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
