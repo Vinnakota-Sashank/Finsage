@@ -1,70 +1,45 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
 } from "recharts";
 
-const weeklyAlerts = [
-  { week: "W1", count: 2 },
-  { week: "W2", count: 5 },
-  { week: "W3", count: 3 },
-  { week: "W4", count: 4 },
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type Severity = "all" | "critical" | "warning" | "info" | "insight";
 
 interface Alert {
+  id: number;
   severity: "critical" | "warning" | "info" | "insight";
   title: string;
   desc: string;
   action: string;
   time: string;
+  is_read: boolean;
 }
 
-const alerts: Alert[] = [
-  {
-    severity: "critical",
-    title: "Unusual Spending Spike Detected",
-    desc: "Shopping spend this week: ₹12,400 — that's 3.1× your weekly average of ₹4,000. Primary transactions: Amazon ₹6,200, Flipkart ₹4,800.",
-    action: "Review Transactions",
-    time: "2 hours ago",
-  },
-  {
-    severity: "warning",
-    title: "Credit Utilization Rising",
-    desc: "Credit card utilization at 68% (₹24,000 / ₹35,000 limit). Credit scores typically drop when utilization exceeds 30%. Pay ₹15,000 before March 20 billing cycle.",
-    action: "Set Payment Reminder",
-    time: "5 hours ago",
-  },
-  {
-    severity: "warning",
-    title: "Dining Budget Almost Exhausted",
-    desc: "Dining budget: ₹7,400 / ₹8,000 used (92%) with 11 days remaining this month.",
-    action: "Adjust Budget",
-    time: "Yesterday",
-  },
-  {
-    severity: "info",
-    title: "Upcoming Auto-Debit",
-    desc: "SIP auto-debit of ₹15,000 scheduled for tomorrow (March 13). Current savings account balance: ₹2,45,000 — sufficient.",
-    action: "View Schedule",
-    time: "Yesterday",
-  },
-  {
-    severity: "insight",
-    title: "Missing Recurring Transaction",
-    desc: "Netflix subscription (₹649) was not charged this billing cycle. Last charge: Feb 10. Subscription may have been cancelled or card expired.",
-    action: "Check Subscription",
-    time: "2 days ago",
-  },
-  {
-    severity: "warning",
-    title: "Goal At Risk",
-    desc: "Goa Trip savings: At current savings rate, projected to reach ₹46,200 by June — ₹3,800 short of your ₹50,000 target.",
-    action: "Adjust Savings Plan",
-    time: "3 days ago",
-  },
-];
+interface AlertsSummaryResponse {
+  filter: string;
+  unread_count: number;
+  weekly_alerts: { week: string; count: number }[];
+  alerts: Alert[];
+}
+
+const fetchApi = async <T,>(path: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      detail = body?.detail ?? detail;
+    } catch {
+      // Keep default HTTP status text.
+    }
+    throw new Error(detail);
+  }
+  return response.json() as Promise<T>;
+};
 
 const severityColors: Record<string, string> = {
   critical: "bg-error",
@@ -83,10 +58,42 @@ const tabs: { label: string; value: Severity }[] = [
 
 const Alerts = () => {
   const [filter, setFilter] = useState<Severity>("all");
-  const filtered = filter === "all" ? alerts : alerts.filter(a => a.severity === filter);
+
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["alerts", "summary", filter],
+    queryFn: () => fetchApi<AlertsSummaryResponse>(`/api/v1/alerts/summary?severity=${filter}&weeks=4`),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const weeklyAlerts = data?.weekly_alerts ?? [];
+  const filtered = data?.alerts ?? [];
+
+  const handleAction = async (alertId: number) => {
+    try {
+      await fetchApi(`/api/v1/alerts/${alertId}/read`, { method: "PATCH" });
+      await refetch();
+    } catch {
+      // Non-blocking action
+    }
+  };
 
   return (
     <DashboardLayout title="Proactive Intelligence Alerts" subtitle="AI-powered anomaly detection and insights">
+      {isError && (
+        <div className="glass-card p-4 mb-6 border border-error/40">
+          <p className="text-sm text-error mb-3">
+            Failed to load alerts: {error instanceof Error ? error.message : "Unknown error"}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="text-xs px-3 py-1.5 rounded-md bg-surface-3 text-foreground hover:bg-surface-2 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gold-muted">
         {tabs.map(t => (
@@ -103,6 +110,14 @@ const Alerts = () => {
         ))}
       </div>
 
+      {(isLoading || isFetching) && (
+        <p className="text-xs text-muted-foreground mb-6">Refreshing alert intelligence...</p>
+      )}
+
+      {data && (
+        <p className="text-xs text-muted-foreground mb-4">Unread alerts: {data.unread_count}</p>
+      )}
+
       {/* Mini chart */}
       <div className="glass-card p-4 mb-6 max-w-xs">
         <p className="text-xs text-muted-foreground mb-2">Alerts per Week</p>
@@ -117,6 +132,9 @@ const Alerts = () => {
 
       {/* Alert list */}
       <div className="space-y-3">
+        {filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground">No alerts for the selected filter.</p>
+        )}
         {filtered.map((a, i) => (
           <div key={i} className="glass-card-hover p-5 flex items-start gap-4">
             <div className={`w-2.5 h-2.5 rounded-full ${severityColors[a.severity]} mt-1.5 shrink-0`} />
@@ -126,7 +144,10 @@ const Alerts = () => {
                 <span className="text-xs text-muted-foreground shrink-0 ml-4">{a.time}</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">{a.desc}</p>
-              <button className="text-xs px-4 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-colors">
+              <button
+                onClick={() => handleAction(a.id)}
+                className="text-xs px-4 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+              >
                 {a.action}
               </button>
             </div>
