@@ -3,12 +3,14 @@ FinSage Backend — Main Application Entry Point.
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import init_db, get_session
-from app.routers import health, dashboard, auth
+from app.routers import health, dashboard, auth, chat, forecasting, simulator, alerts, tax, ingestion
 
 # Import models so SQLModel discovers them for table creation
 import app.models  # noqa: F401
@@ -30,6 +32,33 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Consistent payload for request-validation failures."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "detail": exc.errors(),
+            "path": request.url.path,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all error response to avoid leaking stack traces in production."""
+    detail = str(exc) if settings.environment == "development" else "Internal server error"
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_server_error",
+            "detail": detail,
+            "path": request.url.path,
+        },
+    )
+
 # CORS — allow frontend to call the API
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +72,12 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(forecasting.router, prefix="/api/v1")
+app.include_router(simulator.router, prefix="/api/v1")
+app.include_router(alerts.router, prefix="/api/v1")
+app.include_router(tax.router, prefix="/api/v1")
+app.include_router(ingestion.router, prefix="/api/v1")
 
 
 @app.post("/api/v1/seed", tags=["dev"])
