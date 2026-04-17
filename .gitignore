@@ -22,3 +22,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local runtime/config artifacts
+.env
+backend/.env
+backend/*.db
+
+# Non-working project artifacts requested to exclude
+planning/
+*.ppt
+*.pptx
+*.pdf
