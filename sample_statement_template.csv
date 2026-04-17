@@ -1,0 +1,5 @@
+amount,category,transaction_type,merchant,payment_mode,description,timestamp
+520.50,food_delivery,debit,Swiggy,upi,Lunch order,2026-04-15
+1499.00,subscriptions,debit,Netflix,card,Monthly subscription,2026-04-10
+120000.00,salary,credit,Employer,neft,Monthly salary credit,2026-04-01
+899.00,utilities,debit,Electricity Board,upi,Electricity bill,2026-04-12
