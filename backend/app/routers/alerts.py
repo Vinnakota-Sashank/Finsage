@@ -16,6 +16,7 @@ from app.database import get_session
 from app.models.alert import Alert
 from app.models.user import User
 from app.routers.dashboard import get_dashboard_user
+from app.services.anomaly_detection import run_proactive_anomaly_scan
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -51,6 +52,7 @@ class AlertSummaryResponse(SQLModel):
     unread_count: int
     weekly_alerts: list[WeeklyAlertPoint]
     alerts: list[AlertFeedItem]
+    anomaly_scan: dict | None = None
 
 
 def _relative_time(ts: datetime, now: datetime) -> str:
@@ -151,6 +153,13 @@ async def get_alert_summary(
     session: AsyncSession = Depends(get_session),
 ):
     """Return complete Alerts page payload: filtered feed + weekly trend + unread count."""
+    anomaly_scan: dict | None = None
+    try:
+        anomaly_scan = await run_proactive_anomaly_scan(session, current_user.id)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+
     unread_result = await session.execute(
         select(func.count(Alert.id)).where(Alert.user_id == current_user.id, Alert.is_read == False)
     )
@@ -169,7 +178,19 @@ async def get_alert_summary(
         unread_count=unread_count,
         weekly_alerts=weekly,
         alerts=feed,
+        anomaly_scan=anomaly_scan,
     )
+
+
+@router.post("/run-anomaly")
+async def run_anomaly_scan(
+    current_user: User = Depends(get_dashboard_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Manually trigger proactive anomaly scan and return generated alert stats."""
+    result = await run_proactive_anomaly_scan(session, current_user.id)
+    await session.commit()
+    return result
 
 
 @router.patch("/{alert_id}/read", response_model=dict)

@@ -6,6 +6,8 @@ This seeds the database for development/demo purposes.
 import random
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from sqlalchemy import func
 
 from app.models.user import User
 from app.models.transaction import Transaction
@@ -39,15 +41,45 @@ FOOD_MERCHANTS = {
     "groceries": [("BigBasket", 0.40), ("DMart", 0.35), ("Local Store", 0.25)],
 }
 
+# Keep seed volume high for hackathon demos (2,400+ yearly rows).
+MONTHLY_TXN_FREQUENCY = {
+    "groceries": (20, 32),
+    "food_delivery": (24, 38),
+    "dining_out": (16, 30),
+    "transport": (40, 60),
+    "shopping": (14, 28),
+    "health": (8, 16),
+    "education": (6, 12),
+    "entertainment": (14, 26),
+    "personal": (18, 30),
+}
+
 
 async def seed_demo_data(session: AsyncSession):
     """Seeds the database with Arjun Mehta's 12-month financial history."""
 
     # Check if data already exists
-    from sqlmodel import select
     existing = await session.execute(select(User).where(User.email == "arjun@example.com"))
-    if existing.scalar():
-        return {"message": "Demo data already exists"}
+    existing_user = existing.scalar_one_or_none()
+    if existing_user is not None:
+        tx_count_result = await session.execute(
+            select(func.count(Transaction.id)).where(Transaction.user_id == existing_user.id)
+        )
+        existing_count = int(tx_count_result.scalar() or 0)
+
+        min_target_transactions = 2400
+        if existing_count >= min_target_transactions:
+            return {"message": f"Demo data already exists ({existing_count} transactions)"}
+
+        top_up_count = min_target_transactions - existing_count
+        top_up_transactions = _generate_top_up_transactions(existing_user.id, top_up_count, datetime.utcnow())
+        session.add_all(top_up_transactions)
+        await session.commit()
+        return {
+            "message": (
+                f"Backfilled demo data from {existing_count} to {existing_count + len(top_up_transactions)} transactions"
+            )
+        }
 
     # 1. Create user
     user = User(
@@ -136,7 +168,8 @@ async def seed_demo_data(session: AsyncSession):
                 ))
             else:
                 # Multiple smaller transactions through the month
-                num_txns = random.randint(3, 8)
+                min_txn, max_txn = MONTHLY_TXN_FREQUENCY.get(category, (8, 16))
+                num_txns = random.randint(min_txn, max_txn)
                 total_for_category = base + random.uniform(-base * variance, base * variance)
 
                 # Diwali spike
@@ -170,6 +203,11 @@ async def seed_demo_data(session: AsyncSession):
                         is_recurring=False,
                         source="seed",
                     ))
+
+    min_target_transactions = 2400
+    if len(transactions) < min_target_transactions:
+        top_up_count = min_target_transactions - len(transactions)
+        transactions.extend(_generate_top_up_transactions(user.id, top_up_count, now))
 
     session.add_all(transactions)
 
@@ -243,3 +281,44 @@ def _split_amount(total: float, n: int) -> list[float]:
     weights = [random.random() for _ in range(n)]
     weight_sum = sum(weights)
     return [total * w / weight_sum for w in weights]
+
+
+def _generate_top_up_transactions(user_id: int, top_up_count: int, now: datetime) -> list[Transaction]:
+    """Generate additional micro transactions so yearly seed volume reaches target."""
+    top_up_categories = ["transport", "food_delivery", "groceries", "personal"]
+    generated: list[Transaction] = []
+
+    for _ in range(top_up_count):
+        category = random.choice(top_up_categories)
+        month_offset = random.randint(0, 11)
+        month_date = now - timedelta(days=30 * month_offset)
+        month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        day = random.randint(1, 28)
+
+        merchant = None
+        subcategory = None
+        if category in FOOD_MERCHANTS:
+            merchant_choice = random.choices(
+                [m[0] for m in FOOD_MERCHANTS[category]],
+                [m[1] for m in FOOD_MERCHANTS[category]],
+            )[0]
+            merchant = merchant_choice
+            subcategory = merchant_choice.lower().replace(" ", "_")
+
+        generated.append(
+            Transaction(
+                user_id=user_id,
+                amount=round(random.uniform(80, 650), 2),
+                category=category,
+                subcategory=subcategory,
+                merchant=merchant,
+                description=f"{category.replace('_', ' ').title()} quick expense",
+                payment_mode="upi",
+                transaction_type="debit",
+                timestamp=month_start + timedelta(days=day, hours=random.randint(8, 23), minutes=random.randint(0, 59)),
+                is_recurring=False,
+                source="seed",
+            )
+        )
+
+    return generated

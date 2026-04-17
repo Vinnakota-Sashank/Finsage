@@ -2,27 +2,62 @@
 FinSage Backend — Main Application Entry Point.
 """
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from sqlalchemy import select
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.database import init_db, get_session
+from app.database import init_db, async_session
+from app.models.user import User
 from app.routers import health, dashboard, auth, chat, forecasting, simulator, alerts, tax, ingestion
+from app.services.anomaly_detection import run_proactive_anomaly_scan
 
 # Import models so SQLModel discovers them for table creation
 import app.models  # noqa: F401
 
 settings = get_settings()
+ANOMALY_SCAN_INTERVAL_SECONDS = 15 * 60
+
+
+async def _run_background_anomaly_scans() -> None:
+    """Continuously generate proactive anomaly alerts for active users."""
+    while True:
+        try:
+            async with async_session() as session:
+                result = await session.execute(select(User.id).where(User.is_active == True))
+                user_ids = [row[0] for row in result.all()]
+
+                for user_id in user_ids:
+                    await run_proactive_anomaly_scan(session, user_id)
+
+                await session.commit()
+        except Exception:
+            # Background scans should never crash the app startup lifecycle.
+            pass
+
+        await asyncio.sleep(ANOMALY_SCAN_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: create DB tables. Shutdown: cleanup."""
     await init_db()
-    yield
+
+    anomaly_scan_task: asyncio.Task | None = None
+    if settings.environment != "test":
+        anomaly_scan_task = asyncio.create_task(_run_background_anomaly_scans())
+
+    try:
+        yield
+    finally:
+        if anomaly_scan_task:
+            anomaly_scan_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await anomaly_scan_task
 
 
 app = FastAPI(
