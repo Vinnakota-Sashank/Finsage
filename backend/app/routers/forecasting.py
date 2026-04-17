@@ -18,6 +18,7 @@ from app.models.goal import Goal
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.routers.dashboard import get_dashboard_user
+from app.services.forecasting_engine import forecast_spending_with_engine
 
 router = APIRouter(prefix="/forecasting", tags=["forecasting"])
 
@@ -96,7 +97,11 @@ async def _monthly_spending_series(
     totals = {(int(r.year), int(r.month)): float(r.total) for r in rows}
 
     return [
-        {"month": m.strftime("%b"), "spend": round(totals.get((m.year, m.month), 0.0), 2)}
+        {
+            "month": m.strftime("%b"),
+            "month_key": m.strftime("%Y-%m-01"),
+            "spend": round(totals.get((m.year, m.month), 0.0), 2),
+        }
         for m in month_starts
     ]
 
@@ -142,44 +147,16 @@ async def _build_spending_projection(
     forecast_months: int,
 ) -> dict[str, Any]:
     historical = await _monthly_spending_series(session, user_id, history_months)
-    values = [float(point["spend"]) for point in historical]
-
-    growth_rates: list[float] = []
-    for prev, curr in zip(values[:-1], values[1:]):
-        if prev > 0:
-            growth_rates.append((curr - prev) / prev)
-
-    avg_growth = sum(growth_rates) / len(growth_rates) if growth_rates else 0.03
-    avg_growth = _clamp(avg_growth, -0.15, 0.15)
-
-    volatility = _clamp(0.08 + (abs(avg_growth) * 0.5), 0.08, 0.25)
-    last_value = values[-1] if values else 90000.0
-
-    now = datetime.utcnow()
-    current_month_start = _month_start(now)
-    forecast: list[dict[str, float | str]] = []
-
-    projected = float(last_value)
-    for step in range(1, forecast_months + 1):
-        projected = max(0.0, projected * (1 + avg_growth))
-        month_label = _shift_month(current_month_start, step).strftime("%b")
-        upper = projected * (1 + volatility)
-        lower = projected * (1 - volatility)
-        forecast.append(
-            {
-                "month": month_label,
-                "forecast": round(projected, 2),
-                "upper": round(upper, 2),
-                "lower": round(lower, 2),
-            }
-        )
+    projection = forecast_spending_with_engine(historical, forecast_months)
+    forecast = projection.get("forecast", [])
 
     combined = [
-        {"month": row["month"], "spend": row["spend"]}
+        {"month": row["month"], "month_key": row.get("month_key"), "spend": row["spend"]}
         for row in historical
     ] + [
         {
             "month": row["month"],
+            "month_key": row.get("month_key"),
             "forecast": row["forecast"],
             "upper": row["upper"],
             "lower": row["lower"],
@@ -194,8 +171,9 @@ async def _build_spending_projection(
         "forecast": forecast,
         "combined": combined,
         "next_month_forecast": next_month,
-        "avg_growth_pct": round(avg_growth * 100, 1),
-        "confidence_band_pct": round(volatility * 100, 1),
+        "avg_growth_pct": float(projection.get("avg_growth_pct", 0.0)),
+        "confidence_band_pct": float(projection.get("confidence_band_pct", 0.0)),
+        "engine": projection.get("engine", "heuristic"),
     }
 
 

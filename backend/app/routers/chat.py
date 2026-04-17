@@ -23,6 +23,7 @@ from app.models.conversation import Conversation, Message
 from app.models.goal import Goal
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.services.gemini_tools import FUNCTION_TO_INTENT, get_chat_plan_with_gemini
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 settings = get_settings()
@@ -82,6 +83,8 @@ class ChatHealthResponse(SQLModel):
     ready: bool
     gemini_configured: bool
     mode: str
+    function_calling_enabled: bool
+    tool_chain_size: int
 
 
 def _month_start(dt: datetime) -> datetime:
@@ -513,6 +516,56 @@ def _detect_intent(message: str, previous_user_message: Optional[str]) -> str:
     return "summary"
 
 
+def _select_chart_type(
+    intent: str,
+    default_chart: Optional[str],
+    preferred_chart: Optional[str],
+) -> Optional[str]:
+    allowed_by_intent = {
+        "food_spend": {"donut"},
+        "top_categories": {"donut"},
+        "food_compare": {"bar"},
+        "spending_trend": {"line"},
+        "goal_track": {"trajectory"},
+        "goal_what_if": {"trajectory"},
+    }
+
+    allowed = allowed_by_intent.get(intent)
+    if not allowed:
+        return None
+
+    preferred = (preferred_chart or "").lower().strip()
+    if preferred in allowed:
+        return preferred
+
+    if default_chart in allowed:
+        return default_chart
+
+    return next(iter(allowed))
+
+
+def _resolve_intent_and_chart(
+    message: str,
+    previous_user_message: Optional[str],
+) -> tuple[str, Optional[str]]:
+    fallback_intent = _detect_intent(message, previous_user_message)
+    preferred_chart: Optional[str] = None
+
+    plan = get_chat_plan_with_gemini(message, previous_user_message)
+    if not plan:
+        return fallback_intent, preferred_chart
+
+    confidence = float(plan.get("confidence", 0.0))
+    if confidence < 0.35:
+        return fallback_intent, preferred_chart
+
+    resolved_intent = str(plan.get("intent", fallback_intent)) or fallback_intent
+    chart_type = str(plan.get("chart_type", "")).strip().lower()
+    preferred_chart = None if chart_type in {"", "none"} else chart_type
+
+    return resolved_intent, preferred_chart
+
+
 def _polish_with_gemini(base_text: str, user_message: str, facts: dict[str, Any]) -> str:
     if not settings.gemini_api_key:
         return base_text
@@ -548,7 +601,7 @@ async def _build_assistant_payload(
     next_month_start = _shift_month(current_month_start, 1)
     last_month_start = _shift_month(current_month_start, -1)
 
-    intent = _detect_intent(message, previous_user_message)
+    intent, preferred_chart = _resolve_intent_and_chart(message, previous_user_message)
 
     if intent == "top_categories":
         categories = await _query_top_categories(session, user.id, current_month_start, next_month_start)
@@ -564,7 +617,7 @@ async def _build_assistant_payload(
         return ChatMessagePayload(
             role="assistant",
             content=content,
-            chart_type="donut",
+            chart_type=_select_chart_type(intent, "donut", preferred_chart),
             chart_data=categories,
             suggestions=["Show spending trend", "Compare with last month", "Set category budgets"],
         )
@@ -596,7 +649,7 @@ async def _build_assistant_payload(
         return ChatMessagePayload(
             role="assistant",
             content=content,
-            chart_type="line",
+            chart_type=_select_chart_type(intent, "line", preferred_chart),
             chart_data=trend,
             suggestions=["Show top categories", "How much did I save this month?", "Forecast next month"],
         )
@@ -650,7 +703,7 @@ async def _build_assistant_payload(
         return ChatMessagePayload(
             role="assistant",
             content=content,
-            chart_type="donut",
+            chart_type=_select_chart_type(intent, "donut", preferred_chart),
             chart_data=breakdown,
             suggestions=["Compare with last month", "Show 3-month trend", "Set food budget"],
         )
@@ -690,7 +743,7 @@ async def _build_assistant_payload(
         return ChatMessagePayload(
             role="assistant",
             content=content,
-            chart_type="bar",
+            chart_type=_select_chart_type(intent, "bar", preferred_chart),
             chart_data=chart_data,
             suggestions=["Why did food increase?", "Forecast next month", "Show all categories"],
         )
@@ -763,7 +816,7 @@ async def _build_assistant_payload(
         return ChatMessagePayload(
             role="assistant",
             content=content,
-            chart_type="trajectory",
+            chart_type=_select_chart_type(intent, "trajectory", preferred_chart),
             chart_data=trajectory,
             suggestions=["What if I save 5k more?", "Show all goals", "How much can I cut from spending?"],
         )
@@ -837,6 +890,8 @@ async def chat_health() -> ChatHealthResponse:
         ready=True,
         gemini_configured=bool(settings.gemini_api_key),
         mode="gemini" if settings.gemini_api_key else "rule-based",
+        function_calling_enabled=bool(settings.gemini_api_key),
+        tool_chain_size=len(FUNCTION_TO_INTENT),
     )
 
 
