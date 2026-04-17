@@ -27,14 +27,33 @@ type SmsResponse = {
 
 const formatCurrency = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
 
+const parseErrorResponse = async (response: Response): Promise<string> => {
+  try {
+    const data = await response.json();
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      return data.detail;
+    }
+    if (typeof data?.error === "string" && data.error.trim()) {
+      return data.error;
+    }
+  } catch {
+    // Fall back to generic status text when response is not JSON.
+  }
+
+  return `${response.status} ${response.statusText}`;
+};
+
 const Ingestion = () => {
   const [smsInput, setSmsInput] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [statementPassword, setStatementPassword] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPassword, setPdfPassword] = useState("");
 
   const [smsResult, setSmsResult] = useState<SmsResponse | null>(null);
   const [csvResult, setCsvResult] = useState<UploadResponse | null>(null);
   const [pdfResult, setPdfResult] = useState<UploadResponse | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState<"sms" | "csv" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +76,7 @@ const Ingestion = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
+        throw new Error(await parseErrorResponse(response));
       }
 
       const data = (await response.json()) as UploadResponse;
@@ -74,9 +93,15 @@ const Ingestion = () => {
 
     setLoading("csv");
     setError(null);
+    setCsvError(null);
+    setCsvResult(null);
     try {
       const formData = new FormData();
       formData.append("file", csvFile);
+      const trimmedPassword = statementPassword.trim();
+      if (trimmedPassword) {
+        formData.append("password", trimmedPassword);
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/upload/csv?persist=true`, {
         method: "POST",
@@ -84,13 +109,15 @@ const Ingestion = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
+        throw new Error(await parseErrorResponse(response));
       }
 
       const data = (await response.json()) as UploadResponse;
       setCsvResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "CSV upload failed");
+      const message = err instanceof Error ? err.message : "CSV upload failed";
+      setCsvError(message);
+      setError(message);
     } finally {
       setLoading(null);
     }
@@ -104,6 +131,10 @@ const Ingestion = () => {
     try {
       const formData = new FormData();
       formData.append("file", pdfFile);
+      const trimmedPassword = pdfPassword.trim();
+      if (trimmedPassword) {
+        formData.append("password", trimmedPassword);
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/upload/pdf?persist=false`, {
         method: "POST",
@@ -111,7 +142,7 @@ const Ingestion = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
+        throw new Error(await parseErrorResponse(response));
       }
 
       const data = (await response.json()) as UploadResponse;
@@ -179,21 +210,30 @@ const Ingestion = () => {
         </div>
 
         <div className="glass-card p-6">
-          <h3 className="text-base font-semibold text-foreground mb-2">CSV Upload</h3>
-          <p className="text-xs text-muted-foreground mb-3">Upload a bank statement CSV and import rows.</p>
+          <h3 className="text-base font-semibold text-foreground mb-2">Statement Upload (CSV/XLS/XLSX)</h3>
+          <p className="text-xs text-muted-foreground mb-3">Upload a bank statement file and import rows. For password-protected Excel files, enter password below.</p>
           <input
             type="file"
-            accept=".csv"
+            accept=".csv,.xls,.xlsx"
             onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
             className="w-full text-sm text-muted-foreground"
+          />
+          <input
+            type="password"
+            value={statementPassword}
+            onChange={(e) => setStatementPassword(e.target.value)}
+            placeholder="Excel password (optional)"
+            className="mt-3 w-full bg-surface-3 border border-gold-muted rounded-lg p-2.5 text-sm text-foreground placeholder:text-muted-foreground"
           />
           <button
             onClick={uploadCsv}
             disabled={loading === "csv" || !csvFile}
             className="mt-3 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm disabled:opacity-60"
           >
-            {loading === "csv" ? "Uploading..." : "Upload CSV"}
+            {loading === "csv" ? "Uploading..." : "Upload Statement"}
           </button>
+
+          {csvError && <p className="text-xs text-error mt-2">{csvError}</p>}
 
           {csvResult && (
             <p className="text-xs text-muted-foreground mt-3">
@@ -209,12 +249,19 @@ const Ingestion = () => {
 
         <div className="glass-card p-6">
           <h3 className="text-base font-semibold text-foreground mb-2">PDF Upload</h3>
-          <p className="text-xs text-muted-foreground mb-3">Upload PDF statements for extraction preview.</p>
+          <p className="text-xs text-muted-foreground mb-3">Upload PDF statements for extraction preview. If your statement is locked, enter the password below.</p>
           <input
             type="file"
             accept=".pdf"
             onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
             className="w-full text-sm text-muted-foreground"
+          />
+          <input
+            type="password"
+            value={pdfPassword}
+            onChange={(e) => setPdfPassword(e.target.value)}
+            placeholder="PDF password (optional)"
+            className="mt-3 w-full bg-surface-3 border border-gold-muted rounded-lg p-2.5 text-sm text-foreground placeholder:text-muted-foreground"
           />
           <button
             onClick={uploadPdf}
