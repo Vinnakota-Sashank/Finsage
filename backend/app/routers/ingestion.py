@@ -166,8 +166,7 @@ def _parse_sms_message(message: str) -> Optional[ParsedTransaction]:
     is_credit = any(token in lower for token in ["credited", "credit", "received"])
     transaction_type = "debit" if is_debit or not is_credit else "credit"
 
-    merchant_match = re.search(r"(?:at|to)\s+([a-zA-Z0-9 .&_-]{3,40})", message)
-    merchant = merchant_match.group(1).strip() if merchant_match else None
+    merchant = _extract_merchant_from_description(message)
 
     payment_mode = "upi" if "upi" in lower else "auto_debit" if "auto" in lower else "card" if "card" in lower else "bank"
     category = _infer_category(message if merchant is None else merchant)
@@ -381,12 +380,65 @@ def _extract_merchant_from_description(description: Optional[str]) -> Optional[s
     if not cleaned:
         return None
 
-    # Try common patterns first.
-    match = re.search(r"(?:to|at|via)\s+([A-Za-z0-9 .&_-]{3,40})", cleaned, flags=re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
+    upi_match = re.search(
+        r"UPI/(?:CR|DR)/[^/]+/(?P<merchant>.+?)/[A-Z0-9]{3,6}(?:/|$)",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if upi_match:
+        upi_merchant = _clean_merchant_candidate(upi_match.group("merchant"))
+        if upi_merchant:
+            return upi_merchant
 
-    return cleaned[:40]
+    # Bank narrations often end with AT <branch/address>; this is location, not merchant.
+    cleaned = re.sub(
+        r"\bAT\s+\d{1,8}\s+[A-Za-z0-9 .,&'_-]+$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # Try common patterns first.
+    match = re.search(r"(?:to|via)\s+([A-Za-z0-9 .,&'_-]{3,60})", cleaned, flags=re.IGNORECASE)
+    if match:
+        merchant = _clean_merchant_candidate(match.group(1))
+        if merchant:
+            return merchant
+
+    # For slash-delimited statements, pick the first human-like segment after skipping tokens/noise.
+    for segment in [part.strip() for part in cleaned.split("/") if part and part.strip()]:
+        if re.fullmatch(r"[A-Za-z]{1,3}", segment):
+            continue
+        if re.search(r"\b(?:upi|dep|wdl|tfr|pay|paym|payment|txn|trf|cr|dr)\b", segment, flags=re.IGNORECASE):
+            continue
+
+        merchant = _clean_merchant_candidate(segment)
+        if merchant and len(re.sub(r"[^A-Za-z]", "", merchant)) >= 3:
+            return merchant
+
+    return _clean_merchant_candidate(cleaned[:60])
+
+
+def _clean_merchant_candidate(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    text = re.sub(r"\s+", " ", str(value)).strip(" .,:;-_/")
+    if not text:
+        return None
+
+    text = re.sub(r"\b(?:pay|paym|payment)\s+\d+[A-Za-z0-9]*$", "", text, flags=re.IGNORECASE).strip(" .,:;-_/")
+    if not text:
+        return None
+
+    # Reject obvious location-like values (e.g., "15901 SARDAR PATEL NAGAR").
+    if re.search(r"\d", text) and re.search(r"\b(?:nagar|colony|street|road|sector|phase|layout|area|city)\b", text, flags=re.IGNORECASE):
+        return None
+
+    if text.isdigit():
+        return None
+
+    return text[:60]
 
 
 def _infer_payment_mode(description: Optional[str]) -> str:

@@ -1,7 +1,13 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+const API_PREFIX = API_BASE_URL.endsWith("/api/v1") ? "" : "/api/v1";
+
+const buildApiUrl = (path: string) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${API_PREFIX}${normalizedPath}`;
+};
 
 type ParsedTransaction = {
   amount: number;
@@ -43,6 +49,17 @@ const parseErrorResponse = async (response: Response): Promise<string> => {
   return `${response.status} ${response.statusText}`;
 };
 
+const toUserFacingError = (error: unknown, fallback: string): string => {
+  if (error instanceof TypeError) {
+    const text = error.message.toLowerCase();
+    if (text.includes("failed to fetch") || text.includes("networkerror")) {
+      return `Unable to reach backend at ${API_BASE_URL}. Start backend and retry.`;
+    }
+  }
+
+  return error instanceof Error ? error.message : fallback;
+};
+
 const Ingestion = () => {
   const [smsInput, setSmsInput] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -69,7 +86,7 @@ const Ingestion = () => {
     setLoading("sms");
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/sms/import?persist=true`, {
+      const response = await fetch(buildApiUrl("/ingestion/sms/import?persist=true"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
@@ -82,7 +99,7 @@ const Ingestion = () => {
       const data = (await response.json()) as UploadResponse;
       setSmsResult({ parsed_count: data.parsed_count, transactions: data.preview });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "SMS parse failed");
+      setError(toUserFacingError(err, "SMS parse failed"));
     } finally {
       setLoading(null);
     }
@@ -103,7 +120,7 @@ const Ingestion = () => {
         formData.append("password", trimmedPassword);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/upload/csv?persist=true`, {
+      const response = await fetch(buildApiUrl("/ingestion/upload/csv?persist=true"), {
         method: "POST",
         body: formData,
       });
@@ -115,7 +132,7 @@ const Ingestion = () => {
       const data = (await response.json()) as UploadResponse;
       setCsvResult(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "CSV upload failed";
+      const message = toUserFacingError(err, "CSV upload failed");
       setCsvError(message);
       setError(message);
     } finally {
@@ -136,7 +153,7 @@ const Ingestion = () => {
         formData.append("password", trimmedPassword);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/ingestion/upload/pdf?persist=false`, {
+      const response = await fetch(buildApiUrl("/ingestion/upload/pdf?persist=false"), {
         method: "POST",
         body: formData,
       });
@@ -148,7 +165,7 @@ const Ingestion = () => {
       const data = (await response.json()) as UploadResponse;
       setPdfResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "PDF upload failed");
+      setError(toUserFacingError(err, "PDF upload failed"));
     } finally {
       setLoading(null);
     }

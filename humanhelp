@@ -1,0 +1,17 @@
+# Human Help Needed (FinSage)
+
+I will keep this file as a live checklist. When you complete an item, tell me and I will remove it from here.
+
+## Immediate
+
+- [x] Backend dependencies installed in local virtual environment
+- [x] Backend restarted successfully
+- [x] Gemini mode verified: `/api/v1/chat/health` returns `mode=gemini`, `function_calling_enabled=true`
+- [x] Anomaly trigger verified: `POST /api/v1/alerts/run-anomaly`
+- [x] Seed dataset backfilled to 2,400 transactions
+
+## Optional (Useful for stronger demo)
+
+- [ ] Share 1 real/sanitized bank statement CSV for ingestion quality checks
+
+- [ ] Share 3-5 real/sanitized SMS transaction samples for parser tuning

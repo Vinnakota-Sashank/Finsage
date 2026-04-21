@@ -23,6 +23,19 @@ settings = get_settings()
 ANOMALY_SCAN_INTERVAL_SECONDS = 15 * 60
 
 
+def _build_allowed_origins() -> list[str]:
+    frontend_origin = (settings.frontend_url or "").rstrip("/")
+    origins = [
+        frontend_origin,
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8080",
+    ]
+    # Preserve order while removing empty entries and duplicates.
+    return list(dict.fromkeys(origin for origin in origins if origin))
+
+
 async def _run_background_anomaly_scans() -> None:
     """Continuously generate proactive anomaly alerts for active users."""
     while True:
@@ -97,7 +110,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # CORS — allow frontend to call the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:5173", "http://localhost:8080"],
+    allow_origins=_build_allowed_origins(),
+    # Also allow localhost/127.0.0.1 on arbitrary ports for local dev preview URLs.
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
