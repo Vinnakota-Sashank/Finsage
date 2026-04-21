@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import MetricCard from "@/components/MetricCard";
+import { apiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -66,8 +67,6 @@ type DashboardData = {
   alerts: RecentAlertsResponse;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-
 const GOLD_COLORS = ["#D4AF37", "#FFD700", "#B8860B", "#DAA520", "#C5A028", "#8B7536", "#A0892C", "#997A1E"];
 
 const SEVERITY_COLOR_MAP: Record<string, string> = {
@@ -78,7 +77,7 @@ const SEVERITY_COLOR_MAP: Record<string, string> = {
 };
 
 const fetchApi = async <T,>(path: string): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(apiUrl(path));
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {

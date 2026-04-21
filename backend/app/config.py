@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # CORS
     frontend_url: str = "http://localhost:8080"
 
+    # Demo mode controls (useful for hackathon/public demo deployments)
+    allow_demo_fallback: bool = True
+    auto_seed_demo_data: bool = True
+
     # Environment
     environment: str = "development"
 

@@ -5,6 +5,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/v1/(.*)",
+      "destination": "https://finsage-backend.onrender.com/api/v1/$1"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://finsage-backend.onrender.com/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

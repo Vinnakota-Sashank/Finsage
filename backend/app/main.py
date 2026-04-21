@@ -36,6 +36,21 @@ def _build_allowed_origins() -> list[str]:
     return list(dict.fromkeys(origin for origin in origins if origin))
 
 
+async def _ensure_demo_data() -> None:
+    """Seed demo data once when demo mode is enabled and database is empty."""
+    if not settings.auto_seed_demo_data:
+        return
+
+    async with async_session() as session:
+        existing_user_result = await session.execute(select(User.id).limit(1))
+        if existing_user_result.scalar_one_or_none() is not None:
+            return
+
+        from app.services.seed_data import seed_demo_data
+
+        await seed_demo_data(session)
+
+
 async def _run_background_anomaly_scans() -> None:
     """Continuously generate proactive anomaly alerts for active users."""
     while True:
@@ -59,6 +74,7 @@ async def _run_background_anomaly_scans() -> None:
 async def lifespan(app: FastAPI):
     """Startup: create DB tables. Shutdown: cleanup."""
     await init_db()
+    await _ensure_demo_data()
 
     anomaly_scan_task: asyncio.Task | None = None
     if settings.environment != "test":
@@ -111,8 +127,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_allowed_origins(),
-    # Also allow localhost/127.0.0.1 on arbitrary ports for local dev preview URLs.
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    # Allow local previews plus Vercel/GitHub Pages origins in hosted demos.
+    allow_origin_regex=(
+        r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        r"|^https://([a-zA-Z0-9-]+\.)*vercel\.app$"
+        r"|^https://([a-zA-Z0-9-]+\.)*github\.io$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

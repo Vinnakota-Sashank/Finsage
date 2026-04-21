@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiUrl } from "@/lib/api";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
 } from "recharts";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type Severity = "all" | "critical" | "warning" | "info" | "insight";
 
@@ -27,7 +26,7 @@ interface AlertsSummaryResponse {
 }
 
 const fetchApi = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {

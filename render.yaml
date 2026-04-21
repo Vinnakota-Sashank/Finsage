@@ -9,6 +9,10 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: ALLOW_DEMO_FALLBACK
+        value: "true"
+      - key: AUTO_SEED_DEMO_DATA
+        value: "true"
       - key: FRONTEND_URL
         sync: false
       - key: SECRET_KEY

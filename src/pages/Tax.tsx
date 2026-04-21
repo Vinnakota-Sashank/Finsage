@@ -1,11 +1,10 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line,
 } from "recharts";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type TaxOverviewResponse = {
   section80c: {
@@ -35,7 +34,7 @@ type TaxOverviewResponse = {
 };
 
 const fetchApi = async <T,>(path: string): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(apiUrl(path));
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {

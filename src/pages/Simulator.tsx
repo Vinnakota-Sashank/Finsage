@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiUrl } from "@/lib/api";
 import { ArrowUp, Play } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type SimulatorResponse = {
   scenario: string;
@@ -29,7 +28,7 @@ type SimulatorResponse = {
 const formatCurrency = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
 
 const runSimulation = async (scenario: string): Promise<SimulatorResponse> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/simulator/run`, {
+  const response = await fetch(apiUrl("/api/v1/simulator/run"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario, years: 5, runs: 1000 }),

@@ -1,12 +1,11 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, CheckCircle, BarChart3 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid,
 } from "recharts";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 type GoalProbability = {
   name: string;
@@ -39,7 +38,7 @@ type ForecastOverviewResponse = {
 const insightIcons = [TrendingUp, CheckCircle, BarChart3];
 
 const fetchApi = async <T,>(path: string): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(apiUrl(path));
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {

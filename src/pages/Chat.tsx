@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiUrl } from "@/lib/api";
 import { Send, Sparkles } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, LineChart, Line,
 } from "recharts";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const CONVERSATION_STORAGE_KEY = "finsage-chat-conversation-id";
 const GOLD_COLORS = ["#D4AF37", "#FFD700", "#B8860B", "#DAA520", "#C5A028", "#8B7536"];
 
@@ -72,7 +72,7 @@ const defaultAssistantMessage: ChatMessage = {
 };
 
 const fetchApi = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {

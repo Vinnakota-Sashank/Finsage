@@ -38,7 +38,7 @@ async def get_dashboard_user(
 ) -> User:
     """
     Return authenticated user when token exists.
-    In non-production, fallback to the first available user for demo mode.
+    When demo fallback is enabled, use first available user if token is absent.
     """
     if token:
         credentials_exception = HTTPException(
@@ -60,7 +60,7 @@ async def get_dashboard_user(
             raise credentials_exception
         return user
 
-    if settings.environment != "production":
+    if settings.allow_demo_fallback:
         result = await session.execute(select(User).order_by(User.id))
         demo_user = result.scalars().first()
         if demo_user is not None:

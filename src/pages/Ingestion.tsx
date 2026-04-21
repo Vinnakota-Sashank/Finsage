@@ -1,13 +1,6 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "");
-const API_PREFIX = API_BASE_URL.endsWith("/api/v1") ? "" : "/api/v1";
-
-const buildApiUrl = (path: string) => {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${API_PREFIX}${normalizedPath}`;
-};
+import { apiTargetLabel, apiUrl } from "@/lib/api";
 
 type ParsedTransaction = {
   amount: number;
@@ -53,7 +46,7 @@ const toUserFacingError = (error: unknown, fallback: string): string => {
   if (error instanceof TypeError) {
     const text = error.message.toLowerCase();
     if (text.includes("failed to fetch") || text.includes("networkerror")) {
-      return `Unable to reach backend at ${API_BASE_URL}. Start backend and retry.`;
+      return `Unable to reach backend at ${apiTargetLabel}. Start backend and retry.`;
     }
   }
 
@@ -86,7 +79,7 @@ const Ingestion = () => {
     setLoading("sms");
     setError(null);
     try {
-      const response = await fetch(buildApiUrl("/ingestion/sms/import?persist=true"), {
+      const response = await fetch(apiUrl("/api/v1/ingestion/sms/import?persist=true"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
@@ -120,7 +113,7 @@ const Ingestion = () => {
         formData.append("password", trimmedPassword);
       }
 
-      const response = await fetch(buildApiUrl("/ingestion/upload/csv?persist=true"), {
+      const response = await fetch(apiUrl("/api/v1/ingestion/upload/csv?persist=true"), {
         method: "POST",
         body: formData,
       });
@@ -153,7 +146,7 @@ const Ingestion = () => {
         formData.append("password", trimmedPassword);
       }
 
-      const response = await fetch(buildApiUrl("/ingestion/upload/pdf?persist=false"), {
+      const response = await fetch(apiUrl("/api/v1/ingestion/upload/pdf?persist=false"), {
         method: "POST",
         body: formData,
       });
